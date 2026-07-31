@@ -176,22 +176,28 @@ function M:open(datestr)
   local now = os.date("*t", date)
   self.year = now["year"]
   self.month = now["month"]
-  self.day = now["day"]
   M:open_cal_win(date)
 end
 
 --- toggle calendar window
-function M:toggle()
+function M:toggle(datestr)
   if
     self.win
     and self.buf
     and vim.api.nvim_win_is_valid(self.win)
     and vim.api.nvim_win_get_buf(self.win) == self.buf
   then
-    vim.api.nvim_set_current_win(self.win)
-    vim.api.nvim_win_close(self.win, false)
+    if datestr then
+      vim.api.nvim_set_current_win(self.win)
+      local now = os.date("*t", parse_date(datestr))
+      self.year = now["year"]
+      self.month = now["month"]
+      self:refresh()
+    else
+      vim.api.nvim_win_close(self.win, false)
+    end
   else
-    M:open()
+    M:open(datestr)
   end
 end
 
