@@ -24,4 +24,14 @@ Does not currently offer configuration options, and does not consistently respec
   }
   ```
 
-No `setup()` call required.
+No `setup()` call required if you don't want to change any configuration
+
+### Configuration
+
+pass options that differ from the following defaults to `require("obsidian-calendar").setup()`:
+
+```
+{
+  start_sunday = false
+}
+```

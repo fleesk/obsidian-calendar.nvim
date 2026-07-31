@@ -1,5 +1,6 @@
 local M = {}
 
+local config = require("obsidian-calendar.config").config
 local ONE_DAY = 86400
 
 local DAYS_IN_MONTH = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
@@ -35,19 +36,24 @@ function M:draw_calendar()
 
   local month_name = os.date("%B", self.first_of_month)
   local spacing = string.rep(" ", math.ceil((23 - (string.len(month_name) + 5)) / 2))
+  local weekdays = config.start_sunday and "   Su Mo Tu We Th Fr Sa" or "   Mo Tu We Th Fr Sa Su"
   local calendar_lines = {
     string.format("%s%s %s", spacing, month_name, self.year),
-    "   Mo Tu We Th Fr Sa Su",
+    weekdays,
   }
 
-  -- zero-indexed weekday, 0 is monday = position in calendar
-  self.month_start = first_date.wday == 1 and 6 or first_date.wday - 2
+  -- zero-indexed weekday = position in calendar matrix
+  if config.start_sunday then
+    self.month_start = first_date.wday - 1 -- 0 is sunday
+  else
+    self.month_start = first_date.wday == 1 and 6 or first_date.wday - 2 -- 0 is monday
+  end
   self.month_end = self.month_start + DAYS_IN_MONTH[self.month] - 1
   if self.is_leap_feb then
     self.month_end = self.month_end + 1
   end
 
-  -- start at first monday
+  -- start at first monday/sunday
   local current_day = self.first_of_month - self.month_start * ONE_DAY
 
   local calendar_week = os.date("%W", self.first_of_month) + 1
@@ -71,7 +77,7 @@ function M:set_highlights()
   vim.api.nvim_win_set_hl_ns(self.win, self.ns_id)
   vim.fn.matchaddpos("CalendarWeek", { { 3, 1, 2 }, { 4, 1, 2 }, { 5, 1, 2 }, { 6, 1, 2 }, { 7, 1, 2 }, { 8, 1, 2 } })
 
-  local last_wday = self.month_end % 7 -- 0 is monday
+  local last_wday = self.month_end % 7 -- 0 is sunday
 
   -- length of a match that highlights all days in one week
   local full_line_len = 21
@@ -161,7 +167,7 @@ function M:open_cal_win(date)
   self.win = vim.api.nvim_open_win(self.buf, true, { split = "right", win = 0, vertical = true })
   vim.api.nvim_win_set_width(self.win, 32)
 
-  self.ns_id = self.ns_id or vim.api.nvim_create_namespace("Obsidiancalendar")
+  self.ns_id = self.ns_id or vim.api.nvim_create_namespace("ObsidianCalendar")
   vim.api.nvim_set_hl(self.ns_id, "AdjacentMonthDay", {
     fg = "#737A94", -- foreground color
   })
