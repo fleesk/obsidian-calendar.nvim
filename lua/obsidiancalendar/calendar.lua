@@ -36,7 +36,7 @@ function M:draw_calendar()
   local month_name = os.date("%B", self.first_of_month)
   local spacing = string.rep(" ", math.ceil((23 - (string.len(month_name) + 5)) / 2))
   local calendar_lines = {
-    string.format("%s%s %s", spacing, month_name, tab.year),
+    string.format("%s%s %s", spacing, month_name, first_date.year),
     "   Mo Tu We Th Fr Sa Su",
   }
 
@@ -49,8 +49,7 @@ function M:draw_calendar()
   local calendar_week = os.date("%W", self.first_of_month) + 1
 
   for _ = 1, 6 do -- weeks
-    local spacing = calendar_week < 10 and " " or ""
-    local week = string.format("%d%s ", calendar_week, spacing)
+    local week = string.format("%2d ", calendar_week)
     calendar_week = calendar_week + 1
     for i = 1, 7 do -- days
       local day = os.date("%d", current_day)
