@@ -5,7 +5,7 @@ local ONE_DAY = 86400
 local DAYS_IN_MONTH = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
 
 --- open obsidian daily note for the given day in another window
-function M:select()
+function M:open_daily()
   local pos = vim.api.nvim_win_get_cursor(self.win)
   local month = self.month
   local year = self.year
@@ -19,7 +19,7 @@ function M:select()
     if month == 12 then
       year = year - 1
     end
-  elseif pos[1] > 6 and selected < 20 then
+  elseif pos[1] > 6 and selected < 23 then
     month = self.month == 12 and 1 or self.month + 1
     if month == 1 then
       year = year + 1
@@ -31,29 +31,33 @@ end
 
 --- return the table of lines that make up the calendar view
 function M:draw_calendar()
-  local tab = os.date("*t", self.first_of_month)
+  local first_date = os.date("*t", self.first_of_month)
 
   local month_name = os.date("%B", self.first_of_month)
   local spacing = string.rep(" ", math.ceil((23 - (string.len(month_name) + 5)) / 2))
   local calendar_lines = {
-    string.format("%s%s %s", spacing, month_name, first_date.year),
+    string.format("%s%s %s", spacing, month_name, self.year),
     "   Mo Tu We Th Fr Sa Su",
   }
 
-  -- zero-indexed weekday, 0 is monday
-  local wday = tab.wday == 1 and 6 or tab.wday - 2
+  -- zero-indexed weekday, 0 is monday = position in calendar
+  self.month_start = first_date.wday == 1 and 6 or first_date.wday - 2
+  self.month_end = self.month_start + DAYS_IN_MONTH[self.month] - 1
+  if self.is_leap_feb then
+    self.month_end = self.month_end + 1
+  end
 
   -- start at first monday
-  local current_day = self.first_of_month - wday * ONE_DAY
+  local current_day = self.first_of_month - self.month_start * ONE_DAY
 
   local calendar_week = os.date("%W", self.first_of_month) + 1
 
-  for _ = 1, 6 do -- weeks
+  for _ = 0, 5 do -- weeks
     local week = string.format("%2d ", calendar_week)
     calendar_week = calendar_week + 1
-    for i = 1, 7 do -- days
+    for i = 0, 6 do -- days
       local day = os.date("%d", current_day)
-      week = i == 7 and week .. day or week .. day .. " "
+      week = i == 6 and week .. day or week .. day .. " "
       current_day = current_day + ONE_DAY
     end
     table.insert(calendar_lines, week)
@@ -67,37 +71,47 @@ function M:set_highlights()
   vim.api.nvim_win_set_hl_ns(self.win, self.ns_id)
   vim.fn.matchaddpos("CalendarWeek", { { 3, 1, 2 }, { 4, 1, 2 }, { 5, 1, 2 }, { 6, 1, 2 }, { 7, 1, 2 }, { 8, 1, 2 } })
 
-  local first_wday = os.date("%u", self.first_of_month) - 1 -- 0 is monday
-  local last_wday = os.date("%u", self.last_of_month) - 1 -- 0 is monday
+  local last_wday = self.month_end % 7 -- 0 is monday
 
+  -- length of a match that highlights all days in one week
+  local full_line_len = 21
   -- first line
-  if first_wday ~= 0 then
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 3, 4, 3 * first_wday } })
+  if self.month_start ~= 0 then
+    vim.fn.matchaddpos("AdjacentMonthDay", { { 3, 4, 3 * self.month_start } })
   end
 
   -- final two lines
-  if self.month == 2 and self.year % 4 ~= 0 and last_wday == 6 then -- two adjacent lines on 28 day feb ending on sunday
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 7, 4, 21 } })
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 8, 4, 21 } })
-  elseif last_wday > 1 or first_wday < 5 then -- last day is on second-to-last line
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 7, 7 + 3 * last_wday, 18 - (3 * last_wday) } })
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 8, 4, 21 } })
-  else -- last day is on last line
-    vim.fn.matchaddpos("AdjacentMonthDay", { { 8, 7 + 3 * last_wday, 18 - (3 * last_wday) } })
+  if self.month_end > 34 then -- last day on last line
+    vim.fn.matchaddpos("AdjacentMonthDay", { { 8, 7 + 3 * last_wday, full_line_len - (3 * last_wday) } })
+  else
+    vim.fn.matchaddpos("AdjacentMonthDay", { { 8, 4, full_line_len } })
+    if self.month_end > 27 then -- second to last line
+      vim.fn.matchaddpos("AdjacentMonthDay", { { 7, 7 + 3 * last_wday, full_line_len - 3 * last_wday } })
+    else
+      vim.fn.matchaddpos("AdjacentMonthDay", { { 7, 4, full_line_len } })
+    end
   end
+
+  local augroup = vim.api.nvim_create_augroup("ObsidianCalendar", { clear = true })
+  -- clear hls on buffer switch
   vim.api.nvim_create_autocmd("BufWinEnter", {
     callback = function()
       if vim.api.nvim_get_current_win() == self.win then
         vim.fn.clearmatches(self.win)
       end
     end,
+    group = augroup,
   })
 end
 
 --- update calendar view
 function M:refresh()
   self.first_of_month = os.time({ year = self.year, month = self.month, day = 1 })
-  local days_in_month = (self.year % 4 == 0 and self.month == 2) and 29 or DAYS_IN_MONTH[self.month] -- leap year
+  self.is_leap_feb = self.year % 4 == 0 and self.month == 2
+  local days_in_month = DAYS_IN_MONTH[self.month] -- leap year
+  if self.is_leap_feb then
+    days_in_month = days_in_month + 1
+  end
   self.last_of_month = os.time({ year = self.year, month = self.month, day = days_in_month })
   vim.bo.modifiable = true
   vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, self:draw_calendar())
@@ -130,7 +144,7 @@ end
 --- set up keymaps for the calendar buffer
 function M:set_keymaps()
   vim.keymap.set("n", "<CR>", function()
-    self:select()
+    self:open_daily()
   end, { desc = "Select entry", buf = self.buf })
   vim.keymap.set("n", "<C-P>", function()
     self:previous()
