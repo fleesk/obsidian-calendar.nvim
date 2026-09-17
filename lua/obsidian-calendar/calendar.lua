@@ -175,7 +175,7 @@ function M:open_cal_win(date)
     fg = "#9C9DCC", -- foreground color
   })
 
-  M:set_keymaps()
+  self:set_keymaps()
   self:refresh()
 end
 
@@ -195,7 +195,7 @@ function M:open(datestr)
   local now = os.date("*t", date)
   self.year = now["year"]
   self.month = now["month"]
-  M:open_cal_win(date)
+  self:open_cal_win(date)
 end
 
 --- toggle calendar window
@@ -216,7 +216,7 @@ function M:toggle(datestr)
       vim.api.nvim_win_close(self.win, false)
     end
   else
-    M:open(datestr)
+    self:open(datestr)
   end
 end
 
